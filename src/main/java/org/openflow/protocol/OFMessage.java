@@ -17,6 +17,7 @@
 
 package org.openflow.protocol;
 
+import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -260,7 +261,20 @@ public class OFMessage {
                 sb.append(pktIn.getTotalLength() - OFPacketIn.MINIMUM_LENGTH);
                 sb.append("\nbuffer: ");
                 sb.append(pktIn.getBufferId());
+sb.append("\ntest ");
+sb.append("\\lengt "+pktIn.getPacketData().length);
+sb.append("\ntest ");
+StringBuilder s = new StringBuilder(pktIn.getPacketData().length);
 
+for(int i = 0; i < pktIn.getPacketData().length; i++){
+    s.append((char)pktIn.getPacketData()[i]);
+}
+
+sb.append("\nPayload ");
+eth = IFloodlightProviderService.bcStore.get(cntx,
+        IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+sb.append(eth.getPayload().serialize());
+sb.append(eth.getParent());
                 // If the conext is not set by floodlight, then ignore.
                 if (cntx != null) {
                 // packet type  icmp, arp, etc.

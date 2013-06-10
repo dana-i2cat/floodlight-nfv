@@ -18,10 +18,14 @@
 package org.openflow.protocol;
 
 import java.io.Serializable;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv6;
 
 import org.codehaus.jackson.map.annotate.JsonSerialize;
 import org.jboss.netty.buffer.ChannelBuffer;
@@ -29,12 +33,15 @@ import org.openflow.protocol.serializers.OFMatchJSONSerializer;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
 import org.openflow.util.U8;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Represents an ofp_match structure
  * 
  * @author David Erickson (daviderickson@cs.stanford.edu)
  * @author Rob Sherwood (rob.sherwood@stanford.edu)
+ * @author Josep Batallé (josep.batalle@i2cat.net)
  */
 @JsonSerialize(using = OFMatchJSONSerializer.class)
 public class OFMatch implements Cloneable, Serializable {
@@ -111,9 +118,13 @@ public class OFMatch implements Cloneable, Serializable {
     protected byte networkProtocol;
     protected int networkSource;
     protected int networkDestination;
+    protected String networkv6Source;
+    protected String networkv6Destination;
     protected short transportSource;
     protected short transportDestination;
 
+    protected static Logger logger = LoggerFactory.getLogger(OFMatch.class);;
+    
     /**
      * By default, create a OFMatch that matches everything (mostly because it's
      * the least amount of work to make a valid OFMatch)
@@ -131,6 +142,8 @@ public class OFMatch implements Cloneable, Serializable {
         this.networkTypeOfService = 0;
         this.networkSource = 0;
         this.networkDestination = 0;
+        this.networkv6Source = "";
+        this.networkv6Destination = "";
         this.transportDestination = 0;
         this.transportSource = 0;
     }
@@ -303,6 +316,14 @@ public class OFMatch implements Cloneable, Serializable {
         this.networkDestination = networkDestination;
         return this;
     }
+    
+    public String getNetworkv6Destination(){
+    	return this.networkv6Destination;
+    }
+    public OFMatch setNetworkv6Destination(String networkv6Destination){
+    	this.networkv6Destination = networkv6Destination;
+    	return this;
+    }
 
     /**
      * Parse this match's wildcard fields and return the number of significant
@@ -367,6 +388,14 @@ public class OFMatch implements Cloneable, Serializable {
     public OFMatch setNetworkSource(int networkSource) {
         this.networkSource = networkSource;
         return this;
+    }
+    
+    public String getNetworkv6Source(){
+    	return this.networkv6Source;
+    }
+    public OFMatch setNetworkv6Source(String networkv6Source){
+    	this.networkv6Source = networkv6Source;
+    	return this;
     }
 
     /**
@@ -508,15 +537,14 @@ public class OFMatch implements Cloneable, Serializable {
             setDataLayerVirtualLanPriorityCodePoint((byte) ((0xe000 & scratch) >> 13));
             this.dataLayerType = packetDataBB.getShort();
         }
-
+logger.info("TYPE IN ofMatch "+getDataLayerType());
         switch (getDataLayerType()) {
             case 0x0800:
                 // ipv4
                 // check packet length
                 scratch = packetDataBB.get();
                 scratch = (short) (0xf & scratch);
-                transportOffset = (packetDataBB.position() - 1)
-                                  + (scratch * 4);
+                transportOffset = (packetDataBB.position() - 1) + (scratch * 4);
                 // nw tos (dscp)
                 scratch = packetDataBB.get();
                 setNetworkTypeOfService((byte) ((0xfc & scratch) >> 2));
@@ -549,6 +577,41 @@ public class OFMatch implements Cloneable, Serializable {
                     setNetworkDestination(0);
                 }
                 break;
+            case (short) 0x86DD:
+logger.info("Is a IPv6 packet"); // ipv6
+
+				//src addr
+				packetDataBB.position(22);
+				byte[] ipAddress = new byte[16];
+				for(int j=0;j<16;j++){
+					ipAddress[j] = packetDataBB.get();
+				}
+				String sb = IPv6.ipv6toCompressedForm(ipAddress);
+			    logger.info(sb);
+			    this.networkv6Source = sb;
+				try {
+					Inet6Address net = (Inet6Address) Inet6Address.getByAddress(ipAddress);
+			
+					logger.info(" Inet add "+net);
+				} catch (UnknownHostException e) {
+					e.printStackTrace();
+				}
+				//dst-addr
+				packetDataBB.position(62);
+				ipAddress = new byte[16];
+				for(int j=0;j<16;j++){
+					ipAddress[j] = packetDataBB.get();
+				}
+				sb = IPv6.ipv6toCompressedForm(ipAddress);
+			    logger.info(sb);
+			    this.networkv6Destination = sb;
+				try {
+					InetAddress net = Inet6Address.getByAddress(ipAddress);
+					logger.info(" Inet add "+net);
+				} catch (UnknownHostException e) {
+					e.printStackTrace();
+				}            
+            	break;
             default:
                 setNetworkTypeOfService((byte) 0);
                 setNetworkProtocol((byte) 0);
@@ -556,7 +619,7 @@ public class OFMatch implements Cloneable, Serializable {
                 setNetworkDestination(0);
                 break;
         }
-
+        logger.info("TYPE Network protocol ofMatch "+getNetworkProtocol());
         switch (getNetworkProtocol()) {
             case 0x01:
                 // icmp
@@ -586,7 +649,7 @@ public class OFMatch implements Cloneable, Serializable {
         }
         return this;
     }
-
+    
     /**
      * Read this message off the wire from the specified ByteBuffer
      * 

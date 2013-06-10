@@ -1,6 +1,7 @@
 package net.floodlightcontroller.nfv;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -73,19 +74,36 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 		// Instantiate two objects for OFMatch and OFPacketIn
 		OFPacketIn pin = (OFPacketIn) msg;
+logger.info("OF Version: "+msg.getVersion());
+logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
 
 		OFMatch match = new OFMatch();
+		
 		match.loadFromPacket(pin.getPacketData(), pin.getInPort());
 		logger.info("Routing ");
-
+	
+		logger.info("Layer type "+match.getDataLayerType());
+		String type = String.valueOf(match.getDataLayerType());
+		if(type.equals("-31011")){//IPv6
+			logger.info("IPv6 "+match.getNetworkv6Source());
+			logger.info("IPv6 "+match.getNetworkv6Destination());
+		}
+		if(type.equals("2054")){//IPv6
+			
+		}
 		switch (msg.getType()) {
 		case PACKET_IN:
+	logger.info("Network Source: "+Integer.toString(match.getNetworkSource()));
+	logger.info(Integer.toString(match.getNetworkDestinationMaskLen()));
+
+	
+//logger.info(Short.valueOf(match.getDataLayerSource()));
 			logger.info("Packet IN detected...");
 			if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
 
 				// String url = "http://"+ urlRouting+ ":"+ portRouting+
 				// "/opennaas/ofrouting/VM-Routing1/routing/getRouteTable";
-
+//comment
 				String url = "http://" + urlRouting + ":" + portRouting
 						+ "/opennaas/ofrouting/VM-Routing1/routing/getPath/"
 						+ match.getNetworkSource() + "/"
@@ -114,8 +132,7 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 				logger.info("The outputPort is: " + response);
 
 				if (!response.equals("null")) {
-					logger.info("Response received from OpenNaaS");
-					logger.info("The outputPort is: " + response);
+					logger.info("Response received from OpenNaaS. The outputPort is: " + response);
 					List actionsTo = new ArrayList();
 					OFAction outputTo = new OFActionOutput(Short.parseShort(response));
 					actionsTo.add(outputTo);
