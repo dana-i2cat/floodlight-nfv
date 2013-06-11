@@ -587,12 +587,12 @@ logger.info("Is a IPv6 packet"); // ipv6
 					ipAddress[j] = packetDataBB.get();
 				}
 				String sb = IPv6.ipv6toCompressedForm(ipAddress);
-			    logger.info(sb);
+logger.info(sb);
 			    this.networkv6Source = sb;
 				try {
 					Inet6Address net = (Inet6Address) Inet6Address.getByAddress(ipAddress);
 			
-					logger.info(" Inet add "+net);
+logger.info(" Inet add "+net);
 				} catch (UnknownHostException e) {
 					e.printStackTrace();
 				}
@@ -603,11 +603,11 @@ logger.info("Is a IPv6 packet"); // ipv6
 					ipAddress[j] = packetDataBB.get();
 				}
 				sb = IPv6.ipv6toCompressedForm(ipAddress);
-			    logger.info(sb);
+logger.info(sb);
 			    this.networkv6Destination = sb;
 				try {
 					InetAddress net = Inet6Address.getByAddress(ipAddress);
-					logger.info(" Inet add "+net);
+logger.info(" Inet add "+net);
 				} catch (UnknownHostException e) {
 					e.printStackTrace();
 				}            
@@ -619,7 +619,7 @@ logger.info("Is a IPv6 packet"); // ipv6
                 setNetworkDestination(0);
                 break;
         }
-        logger.info("TYPE Network protocol ofMatch "+getNetworkProtocol());
+logger.info("TYPE Network protocol ofMatch "+getNetworkProtocol());
         switch (getNetworkProtocol()) {
             case 0x01:
                 // icmp
