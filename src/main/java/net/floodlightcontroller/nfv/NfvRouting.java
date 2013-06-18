@@ -74,55 +74,56 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 		// Instantiate two objects for OFMatch and OFPacketIn
 		OFPacketIn pin = (OFPacketIn) msg;
-logger.info("OF Version: "+msg.getVersion());
-logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
+		logger.info("OF Version: " + msg.getVersion());
+		logger.info("OF Version: " + msg.getDataAsString(sw, msg, cntx));
 
 		OFMatch match = new OFMatch();
-		
+
 		match.loadFromPacket(pin.getPacketData(), pin.getInPort());
 		logger.info("Routing ");
-	
-		logger.info("Layer type "+match.getDataLayerType());
-		String type = String.valueOf(match.getDataLayerType());
-		if(match.getDataLayerType() == (short) 0x86DD){//IPv6
-			logger.info("IPv6 "+match.getNetworkv6Source());
-			logger.info("IPv6 "+match.getNetworkv6Destination());
+
+		logger.info("Layer type " + match.getDataLayerType());
+		
+		
+		if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
+			logger.info("IPv6 " + match.getNetworkv6Source());
+			logger.info("IPv6 " + match.getNetworkv6Destination());
 		}
 
 		switch (msg.getType()) {
 		case PACKET_IN:
-	logger.info("Network Source: "+Integer.toString(match.getNetworkSource()));
-	logger.info(Integer.toString(match.getNetworkDestinationMaskLen()));
-
-	
-//logger.info(Short.valueOf(match.getDataLayerSource()));
 			logger.info("Packet IN detected...");
+			logger.info("Network Source: "+ Integer.toString(match.getNetworkSource()));
+			long initialTime = System.currentTimeMillis();
+
+			// logger.info(Short.valueOf(match.getDataLayerSource()));
 			if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
 
 				// String url = "http://"+ urlRouting+ ":"+ portRouting+
 				// "/opennaas/ofrouting/VM-Routing1/routing/getRouteTable";
-//comment
+				// comment
 				String url = "http://" + urlRouting + ":" + portRouting
 						+ "/opennaas/ofrouting/VM-Routing1/routing/getPath/"
 						+ match.getNetworkSource() + "/"
 						+ match.getNetworkDestination() + "/"
 						+ sw.getStringId().toString() + "/"
 						+ match.getInputPort();
-				logger.debug("URL ON : " + url);
+				logger.debug("OpenNaaS URL : " + url);
 				ClientResource service = new ClientResource(url);
 				String response = "";
 				try {
 					Representation string = service.get(MediaType.TEXT_PLAIN);
 					response = string.getText();
-					logger.info("Routing table " + response);
 				} catch (IOException e) {
 					e.printStackTrace();
 				} catch (ResourceException e) {
 					e.printStackTrace();
 				}
 
-				logger.info("source ip: " + IPv4.fromIPv4Address(match.getNetworkSource()));
-				logger.info("dest ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
+				logger.info("source ip: "
+						+ IPv4.fromIPv4Address(match.getNetworkSource()));
+				logger.info("dest ip: "
+						+ IPv4.fromIPv4Address(match.getNetworkDestination()));
 				logger.info("inputport: " + match.getInputPort());
 				logger.info("address: " + sw.getInetAddress());
 				logger.info("mac: " + sw.getStringId());
@@ -130,92 +131,240 @@ logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
 				logger.info("The outputPort is: " + response);
 
 				if (!response.equals("null")) {
-					logger.info("Response received from OpenNaaS. The outputPort is: " + response);
+					logger.info("Response received from OpenNaaS. The outputPort is: "
+							+ response);
+					short type = Ethernet.TYPE_ARP;
+					short inPort = match.getInputPort();
+					short outPort = Short.parseShort(response);
+					int source = match.getNetworkSource();
+					int dest = match.getNetworkDestination();
+					for (int i = 0; i<4 ; i++){								
+						if( i == 1){
+							inPort = Short.parseShort(response);
+							outPort = match.getInputPort();
+							source = match.getNetworkDestination();
+							dest = match.getNetworkSource();
+						}else if( i == 2){
+							type = Ethernet.TYPE_IPv4;
+							inPort = match.getInputPort();
+							outPort = Short.parseShort(response);
+							source = match.getNetworkSource();
+							dest = match.getNetworkDestination();
+						}else if( i == 3){
+							inPort = Short.parseShort(response);
+							outPort = match.getInputPort();
+							source = match.getNetworkDestination();
+							dest = match.getNetworkSource();
+						}
+						// ToArp
+						List<OFAction> actionsToArp = new ArrayList<OFAction>();
+						// Declare the flow
+						OFFlowMod fmToArp = new OFFlowMod();
+						fmToArp.setType(OFType.FLOW_MOD);
+						fmToArp.setPriority((short) 32767);
+						// Declare the action
+						OFAction outputToArp = new OFActionOutput(outPort);
+						actionsToArp.add(outputToArp);
+						// Declare the match
+						OFMatch mToArp = new OFMatch();
+						mToArp.setNetworkSource(source);
+						mToArp.setNetworkDestination(dest);
+						mToArp.setDataLayerType(type);
+						mToArp.setInputPort(inPort);
+						fmToArp.setActions(actionsToArp);
+						fmToArp.setMatch(mToArp);
+						// Push the flow
+						staticFlowEntryPusher.addFlow("Flow-"+i+"-"+source, fmToArp, sw.getStringId());
 
+					}
+/*					
+					// ToArp
+					List<OFAction> actionsToArp = new ArrayList<OFAction>();
+					// Declare the flow
+					OFFlowMod fmToArp = new OFFlowMod();
+					fmToArp.setType(OFType.FLOW_MOD);
+					fmToArp.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputToArp = new OFActionOutput(Short.parseShort(response));
+					actionsToArp.add(outputToArp);
+					// Declare the match
+					OFMatch mToArp = new OFMatch();
+					mToArp.setNetworkSource(match.getNetworkSource());
+					mToArp.setNetworkDestination(match.getNetworkDestination());
+					mToArp.setDataLayerType(Ethernet.TYPE_ARP);
+					mToArp.setInputPort(match.getInputPort());
+					fmToArp.setActions(actionsToArp);
+					fmToArp.setMatch(mToArp);
+					// Push the flow
+					staticFlowEntryPusher.addFlow("FlowToArp", fmToArp, sw.getStringId());
+
+					// IPv4
 					List<OFAction> actionsTo = new ArrayList<OFAction>();
-					 // Declare the flow
-					 OFFlowMod fmTo = new OFFlowMod();
-					 fmTo.setType(OFType.FLOW_MOD);
-					 fmTo.setPriority((short) 32767);
-					 // Declare the action
-					 OFAction outputTo = new OFActionOutput(Short.parseShort(response));
-					 actionsTo.add(outputTo);
-					 // Declare the match
+					// Declare the flow
+					OFFlowMod fmTo = new OFFlowMod();
+					fmTo.setType(OFType.FLOW_MOD);
+					fmTo.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputTo = new OFActionOutput(Short.parseShort(response));
+					actionsTo.add(outputTo);
+					// Declare the match
+					OFMatch mTo = new OFMatch();
+					mTo.setNetworkSource(match.getNetworkSource());
+					mTo.setNetworkDestination(match.getNetworkDestination());
+					mTo.setDataLayerType(Ethernet.TYPE_IPv4);
+					mTo.setInputPort(match.getInputPort());
+					fmTo.setActions(actionsTo);
+					fmTo.setMatch(mTo);
+					// Push the flow
+					staticFlowEntryPusher.addFlow("FlowTo", fmTo, sw.getStringId());
 
-					 OFMatch mTo = new OFMatch();
-					 mTo.setNetworkSource(match.getNetworkSource());
-					 mTo.setNetworkDestination(match.getNetworkDestination());
-					 mTo.setDataLayerType(Ethernet.TYPE_IPv4);
-					 mTo.setInputPort(match.getInputPort());
-					 fmTo.setActions(actionsTo);
-					 fmTo.setMatch(mTo);
-					 // Push the flow
-					 staticFlowEntryPusher.addFlow("FlowTo", fmTo, sw.getStringId());
-
-					//IPv4-From
-					 List<OFAction> actionsFrom = new ArrayList<OFAction>();
-					 // Declare the flow
-					 OFFlowMod fmFrom = new OFFlowMod();
-					 fmFrom.setType(OFType.FLOW_MOD);
-					 fmFrom.setPriority((short) 32767);
-					 // Declare the action
-					 OFAction outputFrom = new OFActionOutput(match.getInputPort());
-					 actionsFrom.add(outputFrom);
-					 // Declare the match
-					 OFMatch mFrom = new OFMatch();
-					 mFrom.setNetworkSource(match.getNetworkDestination());
-					 mFrom.setNetworkDestination(match.getNetworkSource());
-//					 mFrom.setDataLayerType(Ethernet.TYPE_IPv4);
-					 mFrom.setInputPort(Short.parseShort(response));
-					 fmFrom.setActions(actionsFrom);
-					 fmFrom.setMatch(mFrom);
-					 // Push the flow
-					 staticFlowEntryPusher.addFlow("FlowFrom", fmFrom, sw.getStringId());
-					 
-					 //Arp traffic
-					 
-					 
-					//ToArp
-					 List<OFAction> actionsToArp = new ArrayList<OFAction>();
-					  // Declare the flow
-					  OFFlowMod fmToArp = new OFFlowMod();
-					  fmToArp.setType(OFType.FLOW_MOD);
-					  fmFrom.setPriority((short) 32767);
-					  // Declare the action
-					  OFAction outputToArp = new OFActionOutput(Short.parseShort(response));
-					  actionsToArp.add(outputToArp);
-					  // Declare the match
-					  OFMatch mToArp = new OFMatch();
-					  mToArp.setNetworkSource(match.getNetworkSource());
-					  mToArp.setNetworkDestination(match.getNetworkDestination());
-					  mToArp.setDataLayerType(Ethernet.TYPE_ARP);
-					  mToArp.setInputPort(match.getInputPort());
-					  fmToArp.setActions(actionsToArp);					  
-					  fmToArp.setMatch(mToArp);
-					  // Push the flow
-					  staticFlowEntryPusher.addFlow("FlowToArp", fmToArp, sw.getStringId());
-
-					 //ArpFrom
-					  List<OFAction> actionsFromArp = new ArrayList<OFAction>();
-					  // Declare the flow
-					  OFFlowMod fmFromArp = new OFFlowMod();
-					  fmFromArp.setType(OFType.FLOW_MOD);
-					  fmFrom.setPriority((short) 32767);
-					  // Declare the action
-					  OFAction outputFromArp = new OFActionOutput(match.getInputPort());
-					  actionsFromArp.add(outputFromArp);
-					  // Declare the match
-					  OFMatch mFromArp = new OFMatch();
-					  mFromArp.setNetworkSource(match.getNetworkDestination());
-					  mFromArp.setNetworkDestination(match.getNetworkSource());
-					  mFromArp.setDataLayerType(Ethernet.TYPE_ARP);
-					  mFromArp.setInputPort(Short.parseShort(response));
-					  fmFromArp.setActions(actionsFromArp);
-					  fmFromArp.setMatch(mFromArp);
-					  // Push the flow
-					  staticFlowEntryPusher.addFlow("FlowFromArp", fmFromArp, sw.getStringId());
-
+					// ArpFrom
+					List<OFAction> actionsFromArp = new ArrayList<OFAction>();
+					// Declare the flow
+					OFFlowMod fmFromArp = new OFFlowMod();
+					fmFromArp.setType(OFType.FLOW_MOD);
+					fmFromArp.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputFromArp = new OFActionOutput(match.getInputPort());
+					actionsFromArp.add(outputFromArp);
+					// Declare the match
+					OFMatch mFromArp = new OFMatch();
+					mFromArp.setNetworkSource(match.getNetworkDestination());
+					mFromArp.setNetworkDestination(match.getNetworkSource());
+					mFromArp.setDataLayerType(Ethernet.TYPE_ARP);
+					mFromArp.setInputPort(Short.parseShort(response));
+					fmFromArp.setActions(actionsFromArp);
+					fmFromArp.setMatch(mFromArp);
+					// Push the flow
+					staticFlowEntryPusher.addFlow("FlowFromArp", fmFromArp, sw.getStringId());
 					
+					// IPv4-From
+					List<OFAction> actionsFrom = new ArrayList<OFAction>();
+					// Declare the flow
+					OFFlowMod fmFrom = new OFFlowMod();
+					fmFrom.setType(OFType.FLOW_MOD);
+					fmFrom.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputFrom = new OFActionOutput(match.getInputPort());
+					actionsFrom.add(outputFrom);
+					// Declare the match
+					OFMatch mFrom = new OFMatch();
+					mFrom.setNetworkSource(match.getNetworkDestination());
+					mFrom.setNetworkDestination(match.getNetworkSource());
+					mFrom.setDataLayerType(Ethernet.TYPE_IPv4);
+					mFrom.setInputPort(Short.parseShort(response));
+					fmFrom.setActions(actionsFrom);
+					fmFrom.setMatch(mFrom);
+					// Push the flow
+					staticFlowEntryPusher.addFlow("FlowFrom", fmFrom, sw.getStringId());
+*/
+					long totalTime = System.currentTimeMillis() - initialTime;
+					logger.info("fin exec: " + totalTime);
+				}
+				}
+			if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
+				logger.info("IPv6 " + match.getNetworkv6Source());
+				logger.info("IPv6 " + match.getNetworkv6Destination());
+
+				// logger.info(Short.valueOf(match.getDataLayerSource()));
+				if (!match.getNetworkv6Source().isEmpty() && !match.getNetworkv6Destination().isEmpty()) {
+					String url = "http://" + urlRouting + ":" + portRouting
+							+ "/opennaas/ofrouting/VM-Routing1/routing/getPath/"
+							+ match.getNetworkSource() + "/"
+							+ match.getNetworkDestination() + "/"
+							+ sw.getStringId().toString() + "/"
+							+ match.getInputPort();
+					logger.debug("OpenNaaS URL : " + url);
+					ClientResource service = new ClientResource(url);
+					String response = "";
+					try {
+						Representation string = service.get(MediaType.TEXT_PLAIN);
+						response = string.getText();
+					} catch (IOException e) {
+						e.printStackTrace();
+					} catch (ResourceException e) {
+						e.printStackTrace();
+					}
+
+					logger.info("The outputPort is: " + response);
+					short type = Ethernet.TYPE_IPv6;
+					short inPort = match.getInputPort();
+					short outPort = Short.parseShort(response);
+					String source = match.getNetworkv6Source();
+					String dest = match.getNetworkv6Destination();
+					for (int i = 0; i<2 ; i++){								
+						if( i == 1){
+							inPort = Short.parseShort(response);
+							outPort = match.getInputPort();
+							source = match.getNetworkv6Destination();
+							dest = match.getNetworkv6Source();
+						}
+						logger.info("IPv6 not empty");
+						// ToArp
+						List<OFAction> actionsToArp = new ArrayList<OFAction>();
+						// Declare the flow
+						OFFlowMod fmToArp = new OFFlowMod();
+						fmToArp.setType(OFType.FLOW_MOD);
+						fmToArp.setPriority((short) 32767);
+						// Declare the action
+						OFAction outputToArp = new OFActionOutput(outPort);
+						actionsToArp.add(outputToArp);
+						// Declare the match
+						OFMatch mToArp = new OFMatch();
+						mToArp.setNetworkv6Source(source);
+						mToArp.setNetworkv6Destination(dest);
+						mToArp.setDataLayerType(type);
+						mToArp.setInputPort(inPort);
+						fmToArp.setActions(actionsToArp);
+						fmToArp.setMatch(mToArp);
+						// Push the flow
+						logger.info("Ipv6 entry pushed");
+						staticFlowEntryPusher.addFlow("FlowToArp-"+i+"-"+source, fmToArp, sw.getStringId());
+					}
+						
+/*					logger.info("IPv6 not empty");
+					// ToArp
+					List<OFAction> actionsToArp = new ArrayList<OFAction>();
+					// Declare the flow
+					OFFlowMod fmToArp = new OFFlowMod();
+					fmToArp.setType(OFType.FLOW_MOD);
+					fmToArp.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputToArp = new OFActionOutput((short) 2);
+					actionsToArp.add(outputToArp);
+					// Declare the match
+					OFMatch mToArp = new OFMatch();
+					mToArp.setNetworkv6Source(match.getNetworkv6Source());
+					mToArp.setNetworkv6Destination(match.getNetworkv6Destination());
+					mToArp.setDataLayerType(Ethernet.TYPE_IPv6);
+					mToArp.setInputPort(match.getInputPort());
+					fmToArp.setActions(actionsToArp);
+					fmToArp.setMatch(mToArp);
+					// Push the flow
+					logger.info("Ipv6 entry pushed");
+					staticFlowEntryPusher.addFlow("FlowToArp", fmToArp, sw.getStringId());
+					
+					logger.info("Flow from");
+					// IPv4-From
+					List<OFAction> actionsFrom = new ArrayList<OFAction>();
+					// Declare the flow
+					OFFlowMod fmFrom = new OFFlowMod();
+					fmFrom.setType(OFType.FLOW_MOD);
+					fmFrom.setPriority((short) 32767);
+					// Declare the action
+					OFAction outputFrom = new OFActionOutput(match.getInputPort());
+					actionsFrom.add(outputFrom);
+					// Declare the match
+					OFMatch mFrom = new OFMatch();
+					mFrom.setNetworkSource(match.getNetworkDestination());
+					mFrom.setNetworkDestination(match.getNetworkSource());
+					mFrom.setDataLayerType(Ethernet.TYPE_IPv6);
+					mFrom.setInputPort((short) 2);
+					fmFrom.setActions(actionsFrom);
+					fmFrom.setMatch(mFrom);
+					// Push the flow
+					staticFlowEntryPusher.addFlow("FlowFrom", fmFrom, sw.getStringId());
+					*/
 				}
 			}
 			break;
@@ -247,9 +396,12 @@ logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
 	}
 
 	@Override
-	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
-		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
-		staticFlowEntryPusher = context.getServiceImpl(IStaticFlowEntryPusherService.class);
+	public void init(FloodlightModuleContext context)
+			throws FloodlightModuleException {
+		floodlightProvider = context
+				.getServiceImpl(IFloodlightProviderService.class);
+		staticFlowEntryPusher = context
+				.getServiceImpl(IStaticFlowEntryPusherService.class);
 		macAddresses = new ConcurrentSkipListSet<Long>();
 		ipAddresses = new ConcurrentSkipListSet<Long>();
 		logger = LoggerFactory.getLogger(NfvRouting.class);
