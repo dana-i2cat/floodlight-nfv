@@ -15,7 +15,6 @@ import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
 import org.openflow.protocol.OFType;
-import org.openflow.protocol.Wildcards;
 import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.action.OFActionOutput;
 import org.openflow.util.HexString;
@@ -93,10 +92,13 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 		}
 
 		switch (msg.getType()) {
-case PACKET_IN:
+		case PACKET_IN:
 			logger.info("Packet IN detected...");
 			logger.info("Network Source: "+ Integer.toString(match.getNetworkSource()));
 			long initialTime = System.currentTimeMillis();
+
+long midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 
 			// logger.info(Short.valueOf(match.getDataLayerSource()));
 			if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
@@ -105,28 +107,33 @@ case PACKET_IN:
 				// "/opennaas/ofrouting/VM-Routing1/routing/getRouteTable";
 				// comment
 				String url = "http://" + urlRouting + ":" + portRouting
-						+ "/opennaas/ofrouting/VM-Routing1/routing/getSubPath/"
+						+ "/opennaas/ofrouting/VM-Routing1/routing/getPath/"
 						+ match.getNetworkSource() + "/"
 						+ match.getNetworkDestination() + "/"
 						+ sw.getStringId().toString() + "/"
 						+ match.getInputPort();
-				logger.debug("OpenNaaS URL : " + url);
+				logger.info("OpenNaaS URL : " + url);
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 				ClientResource service = new ClientResource(url);
 				String response = "";
-				String receivedOutPort = "";
-				String srcSubnetwork = "";
-				String destSubnetwork = "";
 				try {
+logger.info("request to OpenNaaS...");
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 					Representation string = service.get(MediaType.TEXT_PLAIN);
+logger.info("response obtained...");
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 					response = string.getText();
-					receivedOutPort = response.split(":")[0];
-					srcSubnetwork = response.split(":")[1];
-					destSubnetwork = response.split(":")[2];
 				} catch (IOException e) {
+logger.info("Exception "+e.getMessage());
 					e.printStackTrace();
 				} catch (ResourceException e) {
+logger.info("Exception "+e.getMessage());
 					e.printStackTrace();
 				}
+
 
 				logger.info("source ip: "
 						+ IPv4.fromIPv4Address(match.getNetworkSource()));
@@ -136,53 +143,72 @@ case PACKET_IN:
 				logger.info("address: " + sw.getInetAddress());
 				logger.info("mac: " + sw.getStringId());
 				logger.info("id: " + sw.getId());
-				logger.info("Subnets: "+srcSubnetwork+" and "+destSubnetwork);
-				logger.info("The outputPort is: " + receivedOutPort);
+				logger.info("The outputPort is: " + response);
+/*
+				if (!response.equals("null")) {
 
-				if (!receivedOutPort.equals("null")) {
-long totalTime = System.currentTimeMillis() - initialTime;
-logger.info("fin exec: " + totalTime);
 
-			        
-totalTime = System.currentTimeMillis() - initialTime;
-logger.info("write exec: " + totalTime);					
-					
+OFPacketOut packetOutMessage = (OFPacketOut) floodlightProvider.getOFMessageFactory().getMessage(OFType.PACKET_OUT);
+			        short packetOutLength = (short)OFPacketOut.MINIMUM_LENGTH; // starting length
+
+			        // Set buffer_id, in_port, actions_len
+			        packetOutMessage.setBufferId(pin.getBufferId());
+			        packetOutMessage.setInPort(pin.getInPort());
+			        packetOutMessage.setActionsLength((short)OFActionOutput.MINIMUM_LENGTH);
+			        packetOutLength += OFActionOutput.MINIMUM_LENGTH;
+
+			        // set actions
+			        List<OFAction> actions = new ArrayList<OFAction>(1);
+			        actions.add(new OFActionOutput(Short.valueOf(response), (short) 0));
+			        packetOutMessage.setActions(actions);
+
+			        // set data - only if buffer_id == -1
+			        if (pin.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
+			            byte[] packetData = pin.getPacketData();
+			            packetOutMessage.setPacketData(packetData);
+			            packetOutLength += (short)packetData.length;
+			        }
+
+			        // finally, set the total length
+			        packetOutMessage.setLength(packetOutLength);
+
+			        try {
+						sw.write(packetOutMessage, null);
+						logger.info("write");
+					} catch (IOException e) {
+						logger.error("Failed to write {} to switch {}: {}", new Object[]{ packetOutMessage, sw, e });
+					}
+
+
+
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 					logger.info("Response received from OpenNaaS. The outputPort is: "
-							+ receivedOutPort);
+							+ response);
 					short type = Ethernet.TYPE_ARP;
 					short inPort = match.getInputPort();
-inPort = 0;
-					short outPort = Short.parseShort(receivedOutPort);
+					short outPort = Short.parseShort(response);
 					int source = match.getNetworkSource();
-//source = IPv4.toIPv4Address(srcSubnetwork);
 					int dest = match.getNetworkDestination();
-//dest = IPv4.toIPv4Address(destSubnetwork);
-String mode = "StD";
-					for (int i = 0; i<4 ; i++){
-						if( i == 1){//dst to src
-							inPort = Short.parseShort(receivedOutPort);
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
+					for (int i = 0; i<4 ; i++){								
+						if( i == 1){
+							inPort = Short.parseShort(response);
 							outPort = match.getInputPort();
 							source = match.getNetworkDestination();
-//source = IPv4.toIPv4Address(destSubnetwork);
 							dest = match.getNetworkSource();
-mode = "DtS";
-						}else if( i == 2){//src to dst
+						}else if( i == 2){
 							type = Ethernet.TYPE_IPv4;
 							inPort = match.getInputPort();
-inPort = 0;
-							outPort = Short.parseShort(receivedOutPort);
+							outPort = Short.parseShort(response);
 							source = match.getNetworkSource();
-//source = IPv4.toIPv4Address(srcSubnetwork);
 							dest = match.getNetworkDestination();
-//dest = IPv4.toIPv4Address(destSubnetwork);
-mode = "StD";
-						}else if( i == 3){//dst to src
-							inPort = Short.parseShort(receivedOutPort);
+						}else if( i == 3){
+							inPort = Short.parseShort(response);
 							outPort = match.getInputPort();
 							source = match.getNetworkDestination();
-//source = IPv4.toIPv4Address(destSubnetwork);
 							dest = match.getNetworkSource();
-mode = "DtS";
 						}
 						// ToArp
 						List<OFAction> actionsToArp = new ArrayList<OFAction>();
@@ -198,25 +224,15 @@ mode = "DtS";
 						mToArp.setNetworkSource(source);
 						mToArp.setNetworkDestination(dest);
 						mToArp.setDataLayerType(type);
-					if(inPort != 0)
 						mToArp.setInputPort(inPort);
 						fmToArp.setActions(actionsToArp);
 						fmToArp.setMatch(mToArp);
-//mToArp.setWildcards(Wildcards.FULL.withNwDstMask(24));
 						// Push the flow
-					if(mode.equals("StD")){
-						if(type == Ethernet.TYPE_ARP)
-							staticFlowEntryPusher.addFlow("arp-mod-"+srcSubnetwork+"/24"+dest, fmToArp, sw.getStringId());
-						else
-							staticFlowEntryPusher.addFlow("ip4-mod-"+srcSubnetwork+"/24"+dest, fmToArp, sw.getStringId());
+						staticFlowEntryPusher.addFlow("Flow-"+i+"-"+source, fmToArp, sw.getStringId());
+
 					}
-					else{
-						if(type == Ethernet.TYPE_ARP)
-                                                        staticFlowEntryPusher.addFlow("arp-mod-"+srcSubnetwork+"/24"+destSubnetwork+"/24", fmToArp, sw.getStringId());
-                                                else
-                                                        staticFlowEntryPusher.addFlow("ip4-mod-"+srcSubnetwork+"/24"+destSubnetwork+"/24", fmToArp, sw.getStringId());
-					}
-				}
+midTime = System.currentTimeMillis() - initialTime;
+logger.error("Time: "+midTime +" Total: "+(System.currentTimeMillis() - initialTime));
 /*					
 					// ToArp
 					List<OFAction> actionsToArp = new ArrayList<OFAction>();
@@ -298,50 +314,20 @@ mode = "DtS";
 					// Push the flow
 					staticFlowEntryPusher.addFlow("FlowFrom", fmFrom, sw.getStringId());
 */
-					totalTime = System.currentTimeMillis() - initialTime;
+					long totalTime = System.currentTimeMillis() - initialTime;
 					logger.info("fin exec: " + totalTime);
+//				}
 				}
-				OFPacketOut packetOutMessage = (OFPacketOut) floodlightProvider.getOFMessageFactory().getMessage(OFType.PACKET_OUT);
-		        short packetOutLength = (short)OFPacketOut.MINIMUM_LENGTH; // starting length
-
-		        // Set buffer_id, in_port, actions_len
-		        packetOutMessage.setBufferId(pin.getBufferId());
-		        packetOutMessage.setInPort(pin.getInPort());
-		        packetOutMessage.setActionsLength((short)OFActionOutput.MINIMUM_LENGTH);
-		        packetOutLength += OFActionOutput.MINIMUM_LENGTH;
-
-		        // set actions
-		        List<OFAction> actions = new ArrayList<OFAction>(1);
-		        actions.add(new OFActionOutput(Short.valueOf(receivedOutPort), (short) 0));
-		        packetOutMessage.setActions(actions);
-
-		        // set data - only if buffer_id == -1
-		        if (pin.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
-		            byte[] packetData = pin.getPacketData();
-		            packetOutMessage.setPacketData(packetData);
-		            packetOutLength += (short)packetData.length;
-		        }
-
-		        // finally, set the total length
-		        packetOutMessage.setLength(packetOutLength);
-
-		        try {
-					sw.write(packetOutMessage, null);
-					logger.info("write");
-				} catch (IOException e) {
-					logger.error("Failed to write {} to switch {}: {}", new Object[]{ packetOutMessage, sw, e });
-				}
-			}
-			if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
+			else if (match.getDataLayerType() == (short) 0x86DD && 1==0) {// IPv6
 				logger.info("IPv6 " + match.getNetworkv6Source());
 				logger.info("IPv6 " + match.getNetworkv6Destination());
 
 				// logger.info(Short.valueOf(match.getDataLayerSource()));
 				if (!match.getNetworkv6Source().isEmpty() && !match.getNetworkv6Destination().isEmpty()) {
 					String url = "http://" + urlRouting + ":" + portRouting
-							+ "/opennaas/ofrouting/VM-Routing1/routing/getSubPath/"
-							+ match.getNetworkSource() + "/"
-							+ match.getNetworkDestination() + "/"
+							+ "/opennaas/ofrouting/VM-Routing1/routing/getPath/"
+							+ match.getNetworkv6Source() + "/"
+							+ match.getNetworkv6Destination() + "/"
 							+ sw.getStringId().toString() + "/"
 							+ match.getInputPort();
 					logger.debug("OpenNaaS URL : " + url);

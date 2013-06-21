@@ -579,7 +579,8 @@ logger.info("TYPE IN ofMatch "+getDataLayerType());
                 break;
             case (short) 0x86DD:
 logger.info("Is a IPv6 packet"); // ipv6
-
+logger.error("Packet length: "+packetDataBB.capacity());
+if(packetDataBB.capacity() > 78){
 				//src addr
 				packetDataBB.position(22);
 				byte[] ipAddress = new byte[16];
@@ -611,6 +612,7 @@ logger.info(" Inet add "+net);
 				} catch (UnknownHostException e) {
 					e.printStackTrace();
 				}            
+}
             	break;
             default:
                 setNetworkTypeOfService((byte) 0);
