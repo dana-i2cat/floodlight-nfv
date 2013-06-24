@@ -318,6 +318,8 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule {
                    		"out message to the switch",
                    recommendation=LogMessageDoc.CHECK_SWITCH)
     protected void doFlood(IOFSwitch sw, OFPacketIn pi, FloodlightContext cntx) {
+    	log.debug(Long.toString(sw.getId()));
+    	log.debug(Long.toString(pi.getInPort()));
         if (topology.isIncomingBroadcastAllowed(sw.getId(),
                                                 pi.getInPort()) == false) {
             if (log.isTraceEnabled()) {

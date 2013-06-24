@@ -1069,10 +1069,7 @@ logger.info("TYPE Network protocol ofMatch "+getNetworkProtocol());
      *            one of STR_NW_DST or STR_NW_SRC
      * @throws IllegalArgumentException
      */
-    private
-            void
-            setFromCIDR(String cidr, String which)
-                                                  throws IllegalArgumentException {
+    private void setFromCIDR(String cidr, String which) throws IllegalArgumentException {
         String values[] = cidr.split("/");
         String[] ip_str = values[0].split("\\.");
         int ip = 0;

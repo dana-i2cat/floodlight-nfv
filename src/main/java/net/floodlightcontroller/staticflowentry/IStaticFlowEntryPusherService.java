@@ -57,4 +57,6 @@ public interface IStaticFlowEntryPusherService extends IFloodlightService {
      * Gets a list of flows by switch
      */
     public Map<String, OFFlowMod> getFlows(String dpid);
+
+	String addFlowFromJSON(String name, String fmJson, String swDpid);
 }

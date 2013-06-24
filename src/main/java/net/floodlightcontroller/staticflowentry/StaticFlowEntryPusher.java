@@ -819,4 +819,20 @@ public class StaticFlowEntryPusher
             Map<String, String> removedControllerNodeIPs) {
         // ignore
     }
+    
+    @Override
+    public String addFlowFromJSON(String name, String fmJson, String swDpid){
+    	
+       Map<String, Object> rowValues;
+        try {
+            rowValues = StaticFlowEntries.jsonToStorageEntry(fmJson);
+            String status = "Entry pushed!";
+            storageSource.insertRowAsync(StaticFlowEntryPusher.TABLE_NAME, rowValues);
+            return ("{\"status\" : \"" + status + "\"}");
+        } catch (IOException e) {
+            log.error("Error parsing push flow mod request: " + fmJson, e);
+            e.printStackTrace();
+            return "{\"status\" : \"Error! Could not parse flow mod, see log for details.\"}";
+        }
+    } 
 }
