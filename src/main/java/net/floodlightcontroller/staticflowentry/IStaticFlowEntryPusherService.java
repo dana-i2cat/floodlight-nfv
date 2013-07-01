@@ -58,5 +58,5 @@ public interface IStaticFlowEntryPusherService extends IFloodlightService {
      */
     public Map<String, OFFlowMod> getFlows(String dpid);
 
-	String addFlowFromJSON(String name, String fmJson, String swDpid);
+	public String addFlowFromJSON(String string, String json, String mac);
 }

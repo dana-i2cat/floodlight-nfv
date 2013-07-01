@@ -834,5 +834,5 @@ public class StaticFlowEntryPusher
             e.printStackTrace();
             return "{\"status\" : \"Error! Could not parse flow mod, see log for details.\"}";
         }
-    } 
+    }
 }
