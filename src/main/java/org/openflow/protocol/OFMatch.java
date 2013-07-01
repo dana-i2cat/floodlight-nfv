@@ -580,7 +580,7 @@ logger.info("TYPE IN ofMatch "+getDataLayerType());
             case (short) 0x86DD:
 logger.info("Is a IPv6 packet"); // ipv6
 logger.error("Packet length: "+packetDataBB.capacity());
-if(packetDataBB.capacity() > 78){
+if(packetDataBB.capacity() > 69){
 				//src addr
 				packetDataBB.position(22);
 				byte[] ipAddress = new byte[16];

@@ -12,3 +12,4 @@ target
 *.pyc
 findbugs-results
 *.launch
+src/main/resources/floodlightdefault.properties

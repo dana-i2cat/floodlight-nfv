@@ -499,8 +499,8 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 							+ ":"
 							+ portRouting
 							+ "/opennaas/ofrouting/VM-Routing1/routing/getSubPath/"
-							+ match.getNetworkSource() + "/"
-							+ match.getNetworkDestination() + "/"
+							+ match.getNetworkv6Source() + "/"
+							+ match.getNetworkv6Destination() + "/"
 							+ sw.getStringId().toString() + "/"
 							+ match.getInputPort();
 					logger.debug("OpenNaaS URL : " + url);
