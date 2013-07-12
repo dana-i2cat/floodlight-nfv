@@ -2,6 +2,8 @@ package net.floodlightcontroller.nfv;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -47,6 +49,7 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 	protected static Logger logger;
 	protected String urlRouting = null;
 	protected String portRouting = null;
+	protected Boolean proactive = false;
 
 	@Override
 	public String getName() {
@@ -75,29 +78,28 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 		// Instantiate two objects for OFMatch and OFPacketIn
 		OFPacketIn pin = (OFPacketIn) msg;
-logger.info("OF Version: "+msg.getVersion());
-logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
-Boolean proactive = false;
+//logger.info("OF Version: "+msg.getDataAsString(sw, msg, cntx));
+//Boolean proactive = false;
 		OFMatch match = new OFMatch();
 		
 		match.loadFromPacket(pin.getPacketData(), pin.getInPort());
-		logger.info("Routing ");
 	
-		logger.info("Layer type "+match.getDataLayerType());
+//		logger.info("Layer type "+match.getDataLayerType());
 //		String type = String.valueOf(match.getDataLayerType());
-		if(match.getDataLayerType() == (short) 0x86DD){//IPv6
+/*		if(match.getDataLayerType() == (short) 0x86DD){//IPv6
 			logger.info("IPv6 "+match.getNetworkv6Source());
 			logger.info("IPv6 "+match.getNetworkv6Destination());
 		}
-		String receivedOutPort = "";
+*/		short receivedOutPort = 0;
 		switch (msg.getType()) {
 		case PACKET_IN:
+			if (match.getDataLayerType() == (short) 0x800 || match.getDataLayerType() == (short) 0x806) {
 	logger.info("Network Source: "+Integer.toString(match.getNetworkSource()));
 	logger.info(Integer.toString(match.getNetworkDestinationMaskLen()));
 	long initialTime = System.currentTimeMillis();
 	
 //logger.info(Short.valueOf(match.getDataLayerSource()));
-			logger.info("Packet IN detected...");
+logger.info("Packet IN detected..."+match.getDataLayerType());
 			if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
 
 				// String url = "http://"+ urlRouting+ ":"+ portRouting+
@@ -108,9 +110,9 @@ Boolean proactive = false;
 						+ match.getNetworkSource() + "/"
 						+ match.getNetworkDestination() + "/"
 						+ sw.getStringId().toString() + "/"
-						+ match.getInputPort()
+						+ match.getInputPort() + "/"
 						+ proactive;
-				logger.debug("OpenNaaS URL: " + url);
+logger.info("OpenNaaS URL: " + url);
 				ClientResource service = new ClientResource(url);
 				String response = "";
 				String srcSubnetwork = "";
@@ -118,7 +120,8 @@ Boolean proactive = false;
 				try {
 					Representation string = service.get(MediaType.TEXT_PLAIN);
 					response = string.getText();
-					receivedOutPort = response.split(":")[0];
+logger.error("Response: "+response);
+					receivedOutPort = Short.valueOf(response.split(":")[0]);
 					srcSubnetwork = response.split(":")[1];
 					destSubnetwork = response.split(":")[2];
 					logger.info("Routing table " + response);
@@ -126,56 +129,64 @@ Boolean proactive = false;
 					logger.error("IOException "+e.getMessage());
 					e.printStackTrace();
 				} catch (ResourceException e) {
-					logger.error("ResourceException"+e.getMessage());
-					receivedOutPort = "";					
+					logger.error("ResourceException "+e.getMessage());
+					receivedOutPort = 0;
+				}catch (NullPointerException e) {
+					logger.error("NullPointerException "+e.getMessage());
+					receivedOutPort = 0;
 				}
+				if (receivedOutPort != 0) {
+					logger.info("source ip: " + IPv4.fromIPv4Address(match.getNetworkSource()));
+					logger.info("dest ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
+					logger.info("inputport: " + match.getInputPort());
+					logger.info("mac: " + sw.getStringId());
+					logger.info("Subnets: " + srcSubnetwork + " and " + destSubnetwork);
+					logger.info("The outputPort is: " + receivedOutPort);
 
-				logger.info("source ip: " + IPv4.fromIPv4Address(match.getNetworkSource()));
-				logger.info("dest ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
-				logger.info("inputport: " + match.getInputPort());
-				logger.info("address: " + sw.getInetAddress());
-				logger.info("mac: " + sw.getStringId());
-				logger.info("id: " + sw.getId());
-				logger.info("Subnets: " + srcSubnetwork + " and " + destSubnetwork);
-				logger.info("The outputPort is: " + receivedOutPort);
-
-				if (!receivedOutPort.equals("null")) {
 					logger.info("Response received from OpenNaaS. The outputPort is: " + response);
 					long totalTime = System.currentTimeMillis() - initialTime;
 					logger.info("fin exec: " + totalTime);
 
 					totalTime = System.currentTimeMillis() - initialTime;
 					logger.info("write exec: " + totalTime);
-					
+
 					String name= "";
 					String dstIp = "";
-					String outP = "";					
+					short outP = 0;
 					String srcIp = "";
-					String inP = "";
-					if (Integer.parseInt(receivedOutPort) > 5) {
-						name= "arpin-mod-" + match.getNetworkDestination();
+					short inP = 0;
+					if (receivedOutPort > 1) {//>4
+						name= "arpin-mod-" + IPv4.fromIPv4Address(match.getNetworkDestination());
 						dstIp = IPv4.fromIPv4Address(match.getNetworkDestination());
 						outP = receivedOutPort;
 						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-						
-						name= "i4in-mod-" + match.getNetworkDestination();
+
+						name= "ip4in-mod-" + IPv4.fromIPv4Address(match.getNetworkDestination());
 						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
 
-					} else {
-						name= "arpto-mod-"+ srcSubnetwork+ "/24" + destSubnetwork;
+						name= "arpto-mod-"+ destSubnetwork + "/24" + srcSubnetwork+"/24";
+						dstIp = srcSubnetwork+ "/24";
+						outP = match.getInputPort();
+						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
+
+						name= "ip4to-mod-" + destSubnetwork+ "/24"+ srcSubnetwork+"/24";
+						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
+
+					} else {//output way
+						name= "arpto-mod-"+ srcSubnetwork+ "/24" + destSubnetwork+"/24";
 						dstIp = destSubnetwork+ "/24";
 						outP = receivedOutPort;
 						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-						
-						name= "ip4to-mod-" + srcSubnetwork+ "/24"+ destSubnetwork;
+
+						name= "ip4to-mod-" + srcSubnetwork+ "/24"+ destSubnetwork+"/24";
 						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
-						
-						name= "arpin-mod-" + match.getNetworkSource();
+
+						name= "arpin-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
 						dstIp = IPv4.fromIPv4Address(match.getNetworkSource());
-						outP = Short.toString(match.getInputPort());
+						outP = match.getInputPort();
 						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-						
-						name= "ip4in-mod-" + match.getNetworkSource();
+
+						name= "ip4in-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
 						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
 
 					}
@@ -187,10 +198,20 @@ Boolean proactive = false;
 							+ receivedOutPort);
 				}
 			}
-			if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
+			}
+/*			if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
 				logger.info("IPv6 " + match.getNetworkv6Source());
 				logger.info("IPv6 " + match.getNetworkv6Destination());
-
+				
+				try {
+					InetAddress srcAddr = InetAddress.getByName(match.getNetworkv6Source());
+					InetAddress dstAddr = InetAddress.getByName(match.getNetworkv6Destination());
+				} catch (UnknownHostException e1) {
+					logger.error("UnknownHostException");
+					match.setNetworkv6Source(null);
+					match.setNetworkv6Destination(null);
+					e1.printStackTrace();
+				}
 				// logger.info(Short.valueOf(match.getDataLayerSource()));
 				if (!match.getNetworkv6Source().isEmpty() && !match.getNetworkv6Destination().isEmpty()) {
 					String url = "http://" + urlRouting + ":" + portRouting
@@ -198,7 +219,8 @@ Boolean proactive = false;
 							+ match.getNetworkv6Source() + "/"
 							+ match.getNetworkv6Destination() + "/"
 							+ sw.getStringId().toString() + "/"
-							+ match.getInputPort();
+							+ match.getInputPort() + "/"
+							+ proactive;
 					logger.error("OpenNaaS URL : " + url);
 					ClientResource service = new ClientResource(url);
 					String response = "";
@@ -207,7 +229,7 @@ Boolean proactive = false;
 					try {
 						Representation string = service.get(MediaType.TEXT_PLAIN);
 						response = string.getText();
-						receivedOutPort = response.split(":")[0];
+						receivedOutPort = Short.valueOf(response.split(":")[0]);
 						srcSubnetwork = response.split(":")[1];
 						destSubnetwork = response.split(":")[2];
 					} catch (IOException e) {
@@ -215,52 +237,53 @@ Boolean proactive = false;
 						e.printStackTrace();
 					} catch (ResourceException e) {
 						logger.error("ResourceException"+e.getMessage());
-						receivedOutPort = "";					
+						receivedOutPort = 0;					
 					}
-
-					logger.info("The outputPort is: " + receivedOutPort);
-					short type = Ethernet.TYPE_IPv6;
-					short inPort = match.getInputPort();
-					short outPort = Short.parseShort(receivedOutPort);
-					String source = match.getNetworkv6Source();
-					String dest = match.getNetworkv6Destination();
-					for (int i = 0; i < 2; i++) {
-						if (i == 1) {
-							inPort = Short.parseShort(receivedOutPort);
-							outPort = match.getInputPort();
-							source = match.getNetworkv6Destination();
-							dest = match.getNetworkv6Source();
+					if (receivedOutPort != 0) {
+						logger.info("The outputPort is: " + receivedOutPort);
+						short type = Ethernet.TYPE_IPv6;
+						short inPort = match.getInputPort();
+						short outPort = receivedOutPort;
+						String source = match.getNetworkv6Source();
+						String dest = match.getNetworkv6Destination();
+						for (int i = 0; i < 2; i++) {
+							if (i == 1) {
+								inPort = receivedOutPort;
+								outPort = match.getInputPort();
+								source = match.getNetworkv6Destination();
+								dest = match.getNetworkv6Source();
+							}
+							logger.info("IPv6 not empty");
+							// ToArp
+							List<OFAction> actionsToArp = new ArrayList<OFAction>();
+							// Declare the flow
+							OFFlowMod fmToArp = new OFFlowMod();
+							fmToArp.setType(OFType.FLOW_MOD);
+							fmToArp.setPriority((short) 32767);
+							// Declare the action
+							OFAction outputToArp = new OFActionOutput(outPort);
+							actionsToArp.add(outputToArp);
+							// Declare the match
+							OFMatch mToArp = new OFMatch();
+							mToArp.setDataLayerType(type);
+							mToArp.setNetworkv6Source(source);
+							mToArp.setNetworkv6Destination(dest);
+							mToArp.setDataLayerType(type);
+							mToArp.setInputPort(inPort);
+							fmToArp.setActions(actionsToArp);
+							fmToArp.setMatch(mToArp);
+							// Push the flow
+							logger.error(fmToArp.toString());
+							
+							logger.info("Ipv6 entry pushed");
+							staticFlowEntryPusher.addFlow("FlowToArp-" + i + "-"
+									+ source, fmToArp, sw.getStringId());
 						}
-						logger.info("IPv6 not empty");
-						// ToArp
-						List<OFAction> actionsToArp = new ArrayList<OFAction>();
-						// Declare the flow
-						OFFlowMod fmToArp = new OFFlowMod();
-						fmToArp.setType(OFType.FLOW_MOD);
-						fmToArp.setPriority((short) 32767);
-						// Declare the action
-						OFAction outputToArp = new OFActionOutput(outPort);
-						actionsToArp.add(outputToArp);
-						// Declare the match
-						OFMatch mToArp = new OFMatch();
-						mToArp.setDataLayerType(type);
-						mToArp.setNetworkv6Source(source);
-						mToArp.setNetworkv6Destination(dest);
-						mToArp.setDataLayerType(type);
-						mToArp.setInputPort(inPort);
-						fmToArp.setActions(actionsToArp);
-						fmToArp.setMatch(mToArp);
-						// Push the flow
-						logger.error(fmToArp.toString());
-						
-						logger.info("Ipv6 entry pushed");
-						staticFlowEntryPusher.addFlow("FlowToArp-" + i + "-"
-								+ source, fmToArp, sw.getStringId());
 					}
 
 				}
 			}
-			if (!receivedOutPort.equals("")) {
+*/			if (receivedOutPort != 0) {
 				OFPacketOut packetOutMessage = (OFPacketOut) floodlightProvider.getOFMessageFactory().getMessage(OFType.PACKET_OUT);
 				short packetOutLength = (short) OFPacketOut.MINIMUM_LENGTH; // starting
 																			// length
@@ -295,10 +318,10 @@ Boolean proactive = false;
 			break;
 		}
 
-		return Command.CONTINUE;
+		return Command.STOP;
 	}
 	
-	private String setJsonToSend(String mac, String name, String type, String SrcIp, String DstIp, String inP, String outP){
+	private String setJsonToSend(String mac, String name, String type, String SrcIp, String DstIp, short inP, short outP){
 		String json = "{\"switch\": \""+mac+"\", \"name\":\""+name+"\", \"ether-type\":\""+type+"\", \"dst-ip\":\""
 				+ DstIp+ "\" ,\"priority\":\"32767\",\"active\":\"true\", \"actions\":\"output="+outP+ "\"}";
 		
@@ -342,11 +365,15 @@ Boolean proactive = false;
 		try {
 			String idleTimeout = configOptions.get("url");
 			String port = configOptions.get("port");
+			String nfvType = configOptions.get("NFVType");
 			if (idleTimeout != null) {
 				urlRouting = idleTimeout;
 			}
 			if (port != null) {
 				portRouting = port;
+			}
+			if (proactive != null){
+				proactive = Boolean.valueOf(nfvType);
 			}
 		} catch (NumberFormatException e) {
 			logger.warn("Error parsing flow idle timeout, "

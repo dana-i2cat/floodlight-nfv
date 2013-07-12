@@ -577,10 +577,10 @@ logger.info("TYPE IN ofMatch "+getDataLayerType());
                     setNetworkDestination(0);
                 }
                 break;
-            case (short) 0x86DD:
+            /*case (short) 0x86DD:
 logger.info("Is a IPv6 packet"); // ipv6
 logger.error("Packet length: "+packetDataBB.capacity());
-if(packetDataBB.capacity() > 69){
+if(packetDataBB.capacity() > 78){
 				//src addr
 				packetDataBB.position(22);
 				byte[] ipAddress = new byte[16];
@@ -614,14 +614,14 @@ logger.info(" Inet add "+net);
 				}            
 }
             	break;
-            default:
+ */           default:
                 setNetworkTypeOfService((byte) 0);
                 setNetworkProtocol((byte) 0);
                 setNetworkSource(0);
                 setNetworkDestination(0);
                 break;
         }
-logger.info("TYPE Network protocol ofMatch "+getNetworkProtocol());
+logger.error("TYPE Network protocol ofMatch "+getNetworkProtocol());
         switch (getNetworkProtocol()) {
             case 0x01:
                 // icmp
