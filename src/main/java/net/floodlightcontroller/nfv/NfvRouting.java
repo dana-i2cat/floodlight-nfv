@@ -95,24 +95,25 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 				logger.info("Packet IN detected..."+match.getDataLayerType());
 				if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
 
-					String url = "http://admin:123456@" + urlRouting + ":" + portRouting + "/"
+//					String url = "http://"+user+":"+password+"@" + urlRouting + ":" + portRouting + "/"
+					String url = "http://" + urlRouting + ":" + portRouting + "/"
 							+ "opennaas/vrf/routing/route/"
 							+ match.getNetworkSource() + "/"
 							+ match.getNetworkDestination() + "/"
 							+ sw.getStringId().toString() + "/"
-							+ match.getInputPort() + "/"
-							+ proactive;
+							+ match.getInputPort();
+//							+ proactive;
 					logger.info("OpenNaaS URL: " + url);
 					ClientResource service = new ClientResource(url);
 					service.setChallengeResponse(ChallengeScheme.HTTP_BASIC, user, password);
 					String response = "";
-					String destSubnetwork = "";
+//					String destSubnetwork = "";
 					try {
 						Representation string = service.get(MediaType.TEXT_PLAIN);
 						response = string.getText();
 						logger.debug("Response: "+response);
 						receivedOutPort = Short.valueOf(response.split(":")[0]);
-						destSubnetwork = response.split(":")[1];
+//						destSubnetwork = response.split(":")[1];
 					} catch (IOException e) {
 						logger.error("IOException "+e.getMessage());
 						e.printStackTrace();
@@ -128,34 +129,41 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 						logger.debug("Destination ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
 						logger.debug("inputport: " + match.getInputPort());
 						logger.debug("mac: " + sw.getStringId());
-						logger.debug("Subnets: " + destSubnetwork);
-	
+//						logger.debug("Subnets: " + destSubnetwork);
+
 						logger.info("Response received from OpenNaaS. The outputPort is: " + response);
 						long totalTime = System.currentTimeMillis() - initialTime;
 						logger.debug("fin exec: " + totalTime);
-	
+
 						String name= "";
 						String dstIp = "";
 						short outP = 0;
 						String srcIp = "";
 						short inP = 0;
 						//output way
-						name= "arpto-mod-"+ destSubnetwork;
-						dstIp = destSubnetwork;
+//						name= "arpto-mod-"+ destSubnetwork;
+//						name= "arpto-mod-"+ IPv4.fromIPv4Address(match.getNetworkDestination());
+						srcIp = IPv4.fromIPv4Address(match.getNetworkSource());
+						dstIp = IPv4.fromIPv4Address(match.getNetworkDestination());
+name = "0-2054-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
 						outP = receivedOutPort;
 						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-						
-						name= "ip4to-mod-"+ destSubnetwork;
+
+//						name= "ip4to-mod-"+ IPv4.fromIPv4Address(match.getNetworkDestination());
+name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
 						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
-						
+
 						name= "arpin-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
+						srcIp = IPv4.fromIPv4Address(match.getNetworkDestination());
 						dstIp = IPv4.fromIPv4Address(match.getNetworkSource());
+name = "0-2054-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
 						outP = match.getInputPort();
 						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-	
+
 						name= "ip4in-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
+name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
 						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
-					
+
 	
 						totalTime = System.currentTimeMillis() - initialTime;
 						logger.info("write exec: " + totalTime);
