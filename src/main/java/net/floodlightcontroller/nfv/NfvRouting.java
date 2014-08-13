@@ -34,6 +34,12 @@ import org.restlet.resource.ResourceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
+/**
+ *
+ * @author Josep Batallé (josep.batalle@i2cat.net)
+ *
+ */
 public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 	protected IFloodlightProviderService floodlightProvider;
@@ -76,21 +82,15 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pin.getPacketData(), pin.getInPort());
-	
-//		logger.info("Layer type "+match.getDataLayerType());
-//		String type = String.valueOf(match.getDataLayerType());
-/*		if(match.getDataLayerType() == (short) 0x86DD){//IPv6
-			logger.info("IPv6 "+match.getNetworkv6Source());
-			logger.info("IPv6 "+match.getNetworkv6Destination());
-		}
-*/		short receivedOutPort = 0;
+
+		short receivedOutPort = 0;
 		switch (msg.getType()) {
 		case PACKET_IN:
 			if (match.getDataLayerType() == (short) 0x800 || match.getDataLayerType() == (short) 0x806) {
 				logger.info("Network Source: "+Integer.toString(match.getNetworkSource()));
 				logger.info(Integer.toString(match.getNetworkDestinationMaskLen()));
 				long initialTime = System.currentTimeMillis();
-	
+
 				//logger.info(Short.valueOf(match.getDataLayerSource()));
 				logger.info("Packet IN detected..."+match.getDataLayerType());
 				if (match.getNetworkSource() != 0 && match.getNetworkDestination() != 0) {
@@ -102,18 +102,15 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 							+ match.getNetworkDestination() + "/"
 							+ sw.getStringId().toString() + "/"
 							+ match.getInputPort();
-//							+ proactive;
 					logger.info("OpenNaaS URL: " + url);
 					ClientResource service = new ClientResource(url);
 					service.setChallengeResponse(ChallengeScheme.HTTP_BASIC, user, password);
 					String response = "";
-//					String destSubnetwork = "";
 					try {
 						Representation string = service.get(MediaType.TEXT_PLAIN);
 						response = string.getText();
 						logger.debug("Response: "+response);
 						receivedOutPort = Short.valueOf(response.split(":")[0]);
-//						destSubnetwork = response.split(":")[1];
 					} catch (IOException e) {
 						logger.error("IOException "+e.getMessage());
 						e.printStackTrace();
@@ -129,138 +126,38 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 						logger.debug("Destination ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
 						logger.debug("inputport: " + match.getInputPort());
 						logger.debug("mac: " + sw.getStringId());
-//						logger.debug("Subnets: " + destSubnetwork);
 
-						logger.info("Response received from OpenNaaS. The outputPort is: " + response);
-						long totalTime = System.currentTimeMillis() - initialTime;
-						logger.debug("fin exec: " + totalTime);
-
-						String name= "";
-						String dstIp = "";
-						short outP = 0;
-						String srcIp = "";
-						short inP = 0;
-						//output way
-//						name= "arpto-mod-"+ destSubnetwork;
-//						name= "arpto-mod-"+ IPv4.fromIPv4Address(match.getNetworkDestination());
-						srcIp = IPv4.fromIPv4Address(match.getNetworkSource());
-						dstIp = IPv4.fromIPv4Address(match.getNetworkDestination());
-name = "0-2054-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
-						outP = receivedOutPort;
-						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-
-//						name= "ip4to-mod-"+ IPv4.fromIPv4Address(match.getNetworkDestination());
-name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
-						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
-
-						name= "arpin-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
-						srcIp = IPv4.fromIPv4Address(match.getNetworkDestination());
-						dstIp = IPv4.fromIPv4Address(match.getNetworkSource());
-name = "0-2054-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
-						outP = match.getInputPort();
-						setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
-
-						name= "ip4in-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
-name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getStringId().length() - 2);
-						setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
-
-	
-						totalTime = System.currentTimeMillis() - initialTime;
-						logger.info("write exec: " + totalTime);
+						configureFlows(match, sw, receivedOutPort);
 					}
 				}
 			}
-/*			
+/* IPv6 not supported yet
 			if (match.getDataLayerType() == (short) 0x86DD) {// IPv6
-				logger.info("IPv6 " + match.getNetworkv6Source());
-				logger.info("IPv6 " + match.getNetworkv6Destination());
-				long initialTime = System.currentTimeMillis();
-				
-				// logger.info(Short.valueOf(match.getDataLayerSource()));
-				if (!match.getNetworkv6Source().isEmpty() && !match.getNetworkv6Destination().isEmpty()) {
-					String url = "http://" + urlRouting + ":" + portRouting
-							+ "/opennaas/vrf/routing/route/"
-							+ match.getNetworkv6Source() + "/"
-							+ match.getNetworkv6Destination() + "/"
-							+ sw.getStringId().toString() + "/"
-							+ match.getInputPort() + "/"
-							+ proactive;
-					logger.info("OpenNaaS URL: " + url);
-					ClientResource service = new ClientResource(url);
-					String response = "";
-					String destSubnetwork = "";
-					try {
-						Representation string = service.get(MediaType.TEXT_PLAIN);
-						response = string.getText();
-						logger.debug("Response: "+response);
-						receivedOutPort = Short.valueOf(response.split(":")[0]);
-						destSubnetwork = response.split(":")[1];
-					} catch (IOException e) {
-						logger.error("IOException "+e.getMessage());
-						e.printStackTrace();
-					} catch (ResourceException e) {
-						logger.error("ResourceException "+e.getMessage());
-						receivedOutPort = 0;
-					}catch (NullPointerException e) {
-						logger.error("NullPointerException "+e.getMessage());
-						receivedOutPort = 0;
-					}
-					if (receivedOutPort != 0) {
-						logger.debug("Source ip: " + IPv4.fromIPv4Address(match.getNetworkSource()));
-						logger.debug("Destination ip: " + IPv4.fromIPv4Address(match.getNetworkDestination()));
-						logger.debug("inputport: " + match.getInputPort());
-						logger.debug("mac: " + sw.getStringId());
-						logger.debug("Subnets: " + destSubnetwork);
-	
-						logger.info("Response received from OpenNaaS. The outputPort is: " + response);
-						long totalTime = System.currentTimeMillis() - initialTime;
-						logger.debug("fin exec: " + totalTime);
-	
-						String name= "";
-						String dstIp = "";
-						short outP = 0;
-						String srcIp = "";
-						short inP = 0;
-						//output way
-						name= "ip6to-mod-"+ destSubnetwork;
-						dstIp = destSubnetwork;
-						outP = receivedOutPort;
-						setJsonToSend(sw.getStringId(), name, "0x86DD", srcIp, dstIp, inP, outP);
-						
-						name= "ip6in-mod-" + IPv4.fromIPv4Address(match.getNetworkSource());
-						dstIp = IPv4.fromIPv4Address(match.getNetworkSource());
-						outP = match.getInputPort();
-						setJsonToSend(sw.getStringId(), name, "0x86DD", srcIp, dstIp, inP, outP);
-	
-						totalTime = System.currentTimeMillis() - initialTime;
-						logger.info("write exec: " + totalTime);
-					}
-				}
 			}
 */
 			//Send packet-out to switch
 			if (receivedOutPort != 0) {
 				OFPacketOut packetOutMessage = (OFPacketOut) floodlightProvider.getOFMessageFactory().getMessage(OFType.PACKET_OUT);
 				short packetOutLength = (short) OFPacketOut.MINIMUM_LENGTH; // starting
-																			// length
+																		// length
 				// Set buffer_id, in_port, actions_len
 				packetOutMessage.setBufferId(pin.getBufferId());
 				packetOutMessage.setInPort(pin.getInPort());
 				packetOutMessage.setActionsLength((short) OFActionOutput.MINIMUM_LENGTH);
 				packetOutLength += OFActionOutput.MINIMUM_LENGTH;
-				
+
 				// set actions
 				List<OFAction> actions = new ArrayList<OFAction>(1);
 				actions.add(new OFActionOutput(Short.valueOf(receivedOutPort), (short) 0));
 				packetOutMessage.setActions(actions);
-				
+
 				// set data - only if buffer_id == -1
 				if (pin.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
 					byte[] packetData = pin.getPacketData();
 					packetOutMessage.setPacketData(packetData);
 					packetOutLength += (short) packetData.length;
 				}
-				
+
 				// finally, set the total length
 				packetOutMessage.setLength(packetOutLength);
 				try {
@@ -279,11 +176,43 @@ name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getSt
 
 		return Command.STOP;
 	}
-	
+
+	private void configureFlows(OFMatch match, IOFSwitch sw, short receivedOutPort){
+		String name= "";
+		String dstIp = "";
+		short outP = 0;
+		String srcIp = "";
+		short inP = 0;
+
+		//output way
+		srcIp = IPv4.fromIPv4Address(match.getNetworkSource());
+		dstIp = IPv4.fromIPv4Address(match.getNetworkDestination());
+		name = createFlowName("2054", srcIp, dstIp, sw.getStringId().substring(sw.getStringId().length() - 2));
+		outP = receivedOutPort;
+		setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
+
+		name = createFlowName("2048", srcIp, dstIp, sw.getStringId().substring(sw.getStringId().length() - 2));
+		setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
+
+		srcIp = IPv4.fromIPv4Address(match.getNetworkDestination());
+		dstIp = IPv4.fromIPv4Address(match.getNetworkSource());
+		name = createFlowName("2054", srcIp, dstIp, sw.getStringId().substring(sw.getStringId().length() - 2));
+		outP = match.getInputPort();
+		setJsonToSend(sw.getStringId(), name, "0x806", srcIp, dstIp, inP, outP);
+
+		name = createFlowName("2048", srcIp, dstIp, sw.getStringId().substring(sw.getStringId().length() - 2));
+		setJsonToSend(sw.getStringId(), name, "0x800", srcIp, dstIp, inP, outP);
+	}
+
+	private String createFlowName(String type, String srcIp, String dstIp, String swId){
+		String name = "0-"+type+"-" + srcIp + "-" + dstIp + "-"+swId;
+		return name;
+	}
+
 	private String setJsonToSend(String mac, String name, String type, String SrcIp, String DstIp, short inP, short outP){
 		String json = "{\"switch\": \""+mac+"\", \"name\":\""+name+"\", \"ether-type\":\""+type+"\", \"dst-ip\":\""
 				+ DstIp+ "\" ,\"priority\":\"32767\",\"active\":\"true\", \"actions\":\"output="+outP+ "\"}";
-		
+
 		if(!SrcIp.equals("")){
 			json = "{\"switch\": \""+mac+"\", \"name\":\""+name+"\", \"ether-type\":\""+type+"\",  \"src-ip\":\""
 					+ SrcIp+ "\" , \"dst-ip\":\""+ DstIp+ "\" ,\"priority\":\"32767\",\"active\":\"true\", \"actions\":\"output="+outP+ "\"}";
@@ -344,4 +273,3 @@ name = "0-2048-" + srcIp + "-" + dstIp + "-"+sw.getStringId().substring(sw.getSt
 	}
 
 }
-
