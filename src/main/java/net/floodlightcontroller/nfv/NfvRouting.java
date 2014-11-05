@@ -3,6 +3,7 @@ package net.floodlightcontroller.nfv;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,6 +18,7 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.packet.BasePacket;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.staticflowentry.IStaticFlowEntryPusherService;
 
 import org.openflow.protocol.OFMatch;
@@ -34,13 +36,12 @@ import org.restlet.resource.ResourceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 /**
  *
- * @author Josep Batallé (josep.batalle@i2cat.net)
+ * @author Josep Batalle (josep.batalle@i2cat.net)
  *
  */
-public class NfvRouting implements IOFMessageListener, IFloodlightModule {
+public class NfvRouting implements NfvRoutingService, IOFMessageListener, IFloodlightModule {
 
 	protected IFloodlightProviderService floodlightProvider;
 	protected IStaticFlowEntryPusherService staticFlowEntryPusher;
@@ -50,6 +51,7 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 	protected Boolean proactive = false;
 	protected String user = "admin";
 	protected String password = "123456";
+	protected IRestApiService restApi;
 
 	@Override
 	public String getName() {
@@ -223,14 +225,16 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-		// TODO Auto-generated method stub
-		return null;
+		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+	    l.add(NfvRoutingService.class);
+	    return l;
 	}
 
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-		// TODO Auto-generated method stub
-		return null;
+		Map<Class<? extends IFloodlightService>, IFloodlightService> m = new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
+	    m.put(NfvRoutingService.class, this);
+	    return m;
 	}
 
 	@Override
@@ -238,6 +242,7 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(IStaticFlowEntryPusherService.class);
+		l.add(IRestApiService.class);
 		return l;
 	}
 
@@ -245,6 +250,7 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 		staticFlowEntryPusher = context.getServiceImpl(IStaticFlowEntryPusherService.class);
+		restApi = context.getServiceImpl(IRestApiService.class);
 		logger = LoggerFactory.getLogger(NfvRouting.class);
 
 		Map<String, String> configOptions = context.getConfigParams(this);
@@ -270,6 +276,24 @@ public class NfvRouting implements IOFMessageListener, IFloodlightModule {
 	@Override
 	public void startUp(FloodlightModuleContext context) {
 		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+		restApi.addRestletRoutable(new NfvRoutingWebRoutable());
+	}
+
+	@Override
+	public String getBuffer() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public String getUrlRouting() {
+		return urlRouting +":"+ portRouting;
+	}
+	@Override
+	public void setUrlRouting(String urlRouting, String portRouting) {
+		this.urlRouting = urlRouting;
+		this.portRouting = portRouting;
 	}
 
 }
+
